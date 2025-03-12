@@ -1,3 +1,3 @@
 package com.example.aichat
 
-data class Message(val content: String, val isUser: Boolean)
+data class Message(var content: String, val isUser: Boolean)

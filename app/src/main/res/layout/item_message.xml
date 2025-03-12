@@ -3,7 +3,17 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:padding="8dp"
-    android:orientation="horizontal">
+    android:orientation="horizontal"
+    android:gravity="start">
+
+    <ImageView
+        android:id="@+id/avatar"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginEnd="8dp"
+        android:scaleType="centerCrop"
+        android:background="@drawable/ic_robot"
+        android:contentDescription="Robot Avatar" />
 
     <TextView
         android:id="@+id/message_text"
@@ -12,6 +22,5 @@
         android:background="@drawable/border_gray"
         android:padding="10dp"
         android:textSize="16sp"
-        android:gravity="start"
-        android:layout_gravity="start"/>
+        android:gravity="start" />
 </LinearLayout>

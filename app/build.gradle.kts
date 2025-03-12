@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.aichat"
-        minSdk = 24
+        minSdk = 27
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -63,4 +63,7 @@ dependencies {
     implementation(libs.converter.gson)
     implementation(libs.okhttp)
     implementation(libs.logging.interceptor)
+
+    implementation(libs.material)
+
 }
