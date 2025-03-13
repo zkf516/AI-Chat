@@ -15,9 +15,9 @@
         android:gravity="start"
         android:background="@drawable/border_gray">
 
-        <!-- 取消按钮 -->
+        <!-- 更多按钮 -->
         <Button
-            android:id="@+id/cancel_button"
+            android:id="@+id/more_button"
             android:layout_width="25dp"
             android:layout_height="25dp"
             android:paddingTop="10dp"

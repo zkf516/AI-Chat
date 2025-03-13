@@ -5,41 +5,39 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-class ChatAdapter(private val messageList: MutableList<Message>) :
-    RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-
-    companion object {
-        private const val VIEW_TYPE_AI = 0
-        private const val VIEW_TYPE_USER = 1
-    }
-
-    override fun getItemViewType(position: Int): Int {
-        return if (messageList[position].isUser) VIEW_TYPE_USER else VIEW_TYPE_AI
-    }
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        val view = if (viewType == VIEW_TYPE_USER) {
-            LayoutInflater.from(parent.context).inflate(R.layout.item_message_user, parent, false)
-        } else {
-            LayoutInflater.from(parent.context).inflate(R.layout.item_message, parent, false)
-        }
-        return ViewHolder(view)
-    }
-
-    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        (holder as ViewHolder).messageText.text = messageList[position].content
-    }
-
-    override fun getItemCount(): Int = messageList.size
-
-    fun addMessage(message: Message) {
-        messageList.add(message)
-        notifyItemInserted(messageList.size - 1)
-    }
+class ChatAdapter(private val chats: List<Chat>) : RecyclerView.Adapter<ChatAdapter.ViewHolder>() {
+    private var onItemClickListener: ((Int) -> Unit)? = null
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val messageText: TextView = view.findViewById(R.id.message_text)
+        val title: TextView = view.findViewById(R.id.tv_title)
+        val time: TextView = view.findViewById(R.id.tv_time)
     }
-}
 
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+        return ViewHolder(
+            LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_chat, parent, false)
+        )
+    }
+
+    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+        val chat = chats[position]
+        holder.title.text = chat.title
+        holder.time.text = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault())
+            .format(Date(chat.timestamp))
+
+        holder.itemView.setOnClickListener {
+            onItemClickListener?.invoke(position)
+        }
+    }
+
+    fun setOnItemClickListener(listener: (Int) -> Unit) {
+        onItemClickListener = listener
+    }
+
+    override fun getItemCount() = chats.size
+}

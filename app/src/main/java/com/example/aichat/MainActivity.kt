@@ -1,5 +1,6 @@
 package com.example.aichat
 
+import android.annotation.SuppressLint
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -28,101 +29,189 @@ const val API_URL = "https://api.deepseek.com/v1/chat/completions"
 @Suppress("DEPRECATION")
 class MainActivity : AppCompatActivity() {
     private lateinit var sharedPreferences: SharedPreferences
+    private val chats = mutableListOf<Chat>()
+    private var currentChatId = ""
+    private lateinit var messageAdapter: MessageAdapter
+
     private lateinit var recyclerView: RecyclerView
-    private lateinit var chatAdapter: ChatAdapter
     private lateinit var messageInput: EditText
     private lateinit var sendButton: Button
-    private val messageList = mutableListOf<Message>()
+    private lateinit var moreButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_chat)
+        initViews()
+
+        // 初始化适配器
+        messageAdapter = MessageAdapter(mutableListOf())
+        recyclerView.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = messageAdapter
+        }
+
         // 初始化 SharedPreferences
         sharedPreferences = getSharedPreferences("chat_prefs", MODE_PRIVATE)
+        loadChats()  // 加载所有对话
+        checkCurrentChat()
 
         // 设置系统栏透明
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
         WindowCompat.setDecorFitsSystemWindows(window, false)
-
-        setContentView(R.layout.activity_chat)
-
         // 初始化时根据白色背景设置黑色图标
         setSystemBarIconColor(Color.WHITE)
 
-        initViews()
-        setupChat()
+        // 设置监听器
+        sendButton.setOnClickListener { sendMessage() }
+        moreButton.setOnClickListener { showChatDialog() }
     }
 
     private fun initViews() {
         recyclerView = findViewById(R.id.recycler_view)
         messageInput = findViewById(R.id.message_input)
         sendButton = findViewById(R.id.send_button)
+        moreButton = findViewById(R.id.more_button)
     }
 
-    private fun setupChat() {
-        chatAdapter = ChatAdapter(messageList)
-        recyclerView.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = chatAdapter
-        }
-        loadMessages() // 加载历史消息
+    private fun sendMessage() {
+        val text = messageInput.text.toString().trim()
+        if (text.isEmpty()) return
 
-        sendButton.setOnClickListener {
-            val userMessage = messageInput.text.toString().trim()
-            if (userMessage.isNotEmpty()) {
-                addMessage(userMessage, isUser = true)
-                messageInput.text.clear()
-                fetchAIResponse(userMessage)
-            }
-        }
-    }
-
-    private fun loadMessages() {
-        val jsonString = sharedPreferences.getString("messages", null)
-        if (jsonString != null) {
-            try {
-                val jsonArray = JSONArray(jsonString)
-                messageList.clear()
-                for (i in 0 until jsonArray.length()) {
-                    val jsonObject = jsonArray.getJSONObject(i)
-                    val content = jsonObject.getString("content")
-                    val isUser = jsonObject.getBoolean("isUser")
-                    messageList.add(Message(content, isUser))
-                }
-                chatAdapter.notifyDataSetChanged()
-                recyclerView.scrollToPosition(messageList.size - 1)
-            } catch (e: JSONException) {
-                Log.e("MainActivity", "Error parsing messages", e)
-            }
-        }
-    }
-
-    private fun saveMessages() {
-        val jsonArray = JSONArray()
-        for (message in messageList) {
-            val jsonObject = JSONObject()
-            jsonObject.put("content", message.content)
-            jsonObject.put("isUser", message.isUser)
-            jsonArray.put(jsonObject)
-        }
-        sharedPreferences.edit()
-            .putString("messages", jsonArray.toString())
-            .apply()
+        addMessage(text, true)
+        messageInput.text.clear()
+        fetchAIResponse(text)
     }
 
     private fun addMessage(text: String, isUser: Boolean) {
         val message = Message(text, isUser)
-        messageList.add(message)
-        chatAdapter.notifyItemInserted(messageList.size - 1)
-        recyclerView.scrollToPosition(messageList.size - 1)
+        getCurrentChat().messages.add(message)
+        messageAdapter.notifyItemChanged(messageAdapter.itemCount - 1)
+        recyclerView.smoothScrollToPosition(messageAdapter.itemCount - 1)
+        updateChatTitle(text)
 
         // 根据最新消息背景色调整系统栏图标
         val bgColor = if (isUser) Color.WHITE else Color.BLACK
         setSystemBarIconColor(bgColor)
-
-        // 保存消息
-        saveMessages()
+        saveChats()
     }
+
+
+
+    private fun updateChatTitle(newMessage: String) {
+        if (getCurrentChat().title == "新对话" && !newMessage.startsWith("AI:")) {
+            getCurrentChat().title = newMessage.take(20)
+            saveChats()
+        }
+    }
+
+    private fun getCurrentChat(): Chat {
+        return chats.first { it.id == currentChatId }
+    }
+
+    private fun checkCurrentChat() {
+        if (chats.none { it.id == currentChatId }) {
+            createNewChat()
+        }
+        refreshChatDisplay()
+    }
+
+    private fun createNewChat() {
+        val newChat = Chat().apply {
+            messages.add(Message("AI: 您好！有什么可以帮您？", false))
+        }
+        chats.add(0, newChat)
+        currentChatId = newChat.id
+        saveChats()
+        refreshChatDisplay()
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private fun refreshChatDisplay() {
+        messageAdapter = MessageAdapter(getCurrentChat().messages)
+        messageAdapter.notifyDataSetChanged()
+        recyclerView.adapter = messageAdapter
+        recyclerView.scrollToPosition(messageAdapter.itemCount - 1)
+    }
+
+    private fun showChatDialog() {
+        ChatDialogFragment.newInstance(chats).apply {
+            onNewChat = { createNewChat() }
+            onChatSelected = { chatId ->
+                currentChatId = chatId
+                saveChats()
+                refreshChatDisplay()
+            }
+        }.show(supportFragmentManager, "chat_dialog")
+    }
+
+    // 存储相关方法
+    private fun saveChats() {
+        val json = JSONArray().apply {
+            chats.forEach { chat ->
+                put(JSONObject().apply {
+                    put("id", chat.id)
+                    put("title", chat.title)
+                    put("timestamp", chat.timestamp)
+                    put("messages", JSONArray().apply {
+                        chat.messages.forEach { message ->
+                            put(JSONObject().apply {
+                                put("content", message.content)
+                                put("isUser", message.isUser)
+                                put("timestamp", message.timestamp)
+                            })
+                        }
+                    })
+                })
+            }
+        }
+
+        sharedPreferences.edit()
+            .putString("chats", json.toString())
+            .putString("current_chat_id", currentChatId)
+            .apply()
+    }
+
+    private fun loadChats() {
+        chats.clear()
+        val jsonString = sharedPreferences.getString("chats", null)
+        currentChatId = sharedPreferences.getString("current_chat_id", "") ?: ""
+
+        jsonString?.let {
+            try {
+                val jsonArray = JSONArray(it)
+                for (i in 0 until jsonArray.length()) {
+                    val chatJson = jsonArray.getJSONObject(i)
+                    val messages = parseMessages(chatJson.getJSONArray("messages"))
+                    chats.add(
+                        Chat(
+                            id = chatJson.getString("id"),
+                            title = chatJson.getString("title"),
+                            timestamp = chatJson.getLong("timestamp"),
+                            messages = messages.toMutableList()
+                        )
+                    )
+                }
+            } catch (e: JSONException) {
+                Log.e("MainActivity", "Error loading chats", e)
+            }
+        }
+
+        if (chats.isEmpty()) createNewChat()
+    }
+
+    private fun parseMessages(jsonArray: JSONArray): List<Message> {
+        return List(jsonArray.length()) { j ->
+            jsonArray.getJSONObject(j).run {
+                Message(
+                    content = getString("content"),
+                    isUser = getBoolean("isUser"),
+                    timestamp = getLong("timestamp")
+                )
+            }
+        }
+    }
+
 
     private fun fetchAIResponse(userInput: String) {
         val client = OkHttpClient()
@@ -155,7 +244,7 @@ class MainActivity : AppCompatActivity() {
                 Log.e("API_FAILURE", "Network error", e)
                 runOnUiThread {
                     addMessage("AI: 网络请求失败 - ${e.message}", false)
-                    saveMessages() // 失败时保存
+                    saveChats() // 失败时保存
                 }
             }
 
@@ -163,7 +252,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful) {
                     runOnUiThread {
                         addMessage("AI: 请求失败，错误码：${response.code}", false)
-                        saveMessages() // 错误时保存
+                        saveChats() // 错误时保存
                     }
                     return
                 }
@@ -186,10 +275,10 @@ class MainActivity : AppCompatActivity() {
                                 if (!delta.isNullOrEmpty()) {
                                     fullResponse += delta
                                     runOnUiThread {
-                                        messageList.last().content = "AI: $fullResponse"
-                                        chatAdapter.notifyItemChanged(messageList.size - 1)
-                                        recyclerView.scrollToPosition(messageList.size - 1)
-                                        saveMessages() // 每次更新后保存
+                                        getCurrentChat().messages.last().content = "AI: $fullResponse"
+                                        messageAdapter.notifyItemChanged(messageAdapter.itemCount - 1)
+                                        recyclerView.smoothScrollToPosition(messageAdapter.itemCount - 1)
+                                        saveChats() // 每次更新后保存
                                     }
                                 }
                             } catch (e: Exception) {
@@ -197,7 +286,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     }
-                    runOnUiThread { saveMessages() } // 流结束后保存
+                    runOnUiThread { saveChats() } // 流结束后保存
                 }
             }
         })
