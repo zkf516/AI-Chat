@@ -18,6 +18,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import android.content.SharedPreferences
+import org.json.JSONException
 
 //设置 LLM 密匙和链接
 const val API_KEY = "sk-caa8d044547341b288b84829bfa817f4"
@@ -25,6 +27,7 @@ const val API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 @Suppress("DEPRECATION")
 class MainActivity : AppCompatActivity() {
+    private lateinit var sharedPreferences: SharedPreferences
     private lateinit var recyclerView: RecyclerView
     private lateinit var chatAdapter: ChatAdapter
     private lateinit var messageInput: EditText
@@ -33,6 +36,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 初始化 SharedPreferences
+        sharedPreferences = getSharedPreferences("chat_prefs", MODE_PRIVATE)
 
         // 设置系统栏透明
         window.statusBarColor = Color.TRANSPARENT
@@ -60,6 +65,7 @@ class MainActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = chatAdapter
         }
+        loadMessages() // 加载历史消息
 
         sendButton.setOnClickListener {
             val userMessage = messageInput.text.toString().trim()
@@ -71,6 +77,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun loadMessages() {
+        val jsonString = sharedPreferences.getString("messages", null)
+        if (jsonString != null) {
+            try {
+                val jsonArray = JSONArray(jsonString)
+                messageList.clear()
+                for (i in 0 until jsonArray.length()) {
+                    val jsonObject = jsonArray.getJSONObject(i)
+                    val content = jsonObject.getString("content")
+                    val isUser = jsonObject.getBoolean("isUser")
+                    messageList.add(Message(content, isUser))
+                }
+                chatAdapter.notifyDataSetChanged()
+                recyclerView.scrollToPosition(messageList.size - 1)
+            } catch (e: JSONException) {
+                Log.e("MainActivity", "Error parsing messages", e)
+            }
+        }
+    }
+
+    private fun saveMessages() {
+        val jsonArray = JSONArray()
+        for (message in messageList) {
+            val jsonObject = JSONObject()
+            jsonObject.put("content", message.content)
+            jsonObject.put("isUser", message.isUser)
+            jsonArray.put(jsonObject)
+        }
+        sharedPreferences.edit()
+            .putString("messages", jsonArray.toString())
+            .apply()
+    }
+
     private fun addMessage(text: String, isUser: Boolean) {
         val message = Message(text, isUser)
         messageList.add(message)
@@ -80,6 +119,9 @@ class MainActivity : AppCompatActivity() {
         // 根据最新消息背景色调整系统栏图标
         val bgColor = if (isUser) Color.WHITE else Color.BLACK
         setSystemBarIconColor(bgColor)
+
+        // 保存消息
+        saveMessages()
     }
 
     private fun fetchAIResponse(userInput: String) {
@@ -113,6 +155,7 @@ class MainActivity : AppCompatActivity() {
                 Log.e("API_FAILURE", "Network error", e)
                 runOnUiThread {
                     addMessage("AI: 网络请求失败 - ${e.message}", false)
+                    saveMessages() // 失败时保存
                 }
             }
 
@@ -120,6 +163,7 @@ class MainActivity : AppCompatActivity() {
                 if (!response.isSuccessful) {
                     runOnUiThread {
                         addMessage("AI: 请求失败，错误码：${response.code}", false)
+                        saveMessages() // 错误时保存
                     }
                     return
                 }
@@ -145,6 +189,7 @@ class MainActivity : AppCompatActivity() {
                                         messageList.last().content = "AI: $fullResponse"
                                         chatAdapter.notifyItemChanged(messageList.size - 1)
                                         recyclerView.scrollToPosition(messageList.size - 1)
+                                        saveMessages() // 每次更新后保存
                                     }
                                 }
                             } catch (e: Exception) {
@@ -152,6 +197,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     }
+                    runOnUiThread { saveMessages() } // 流结束后保存
                 }
             }
         })
