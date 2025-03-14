@@ -217,6 +217,14 @@ class MainActivity : AppCompatActivity() {
         val client = OkHttpClient()
 
         val messages = JSONArray().apply {
+            // 遍历所有历史消息（包括用户和AI的）
+            getCurrentChat().messages.forEach { message ->
+                put(JSONObject().apply {
+                    put("role", if (message.isUser) "user" else "assistant")
+                    put("content", message.content.removePrefix("AI: "))
+                })
+            }
+
             put(JSONObject().apply {
                 put("role", "user")
                 put("content", userInput)

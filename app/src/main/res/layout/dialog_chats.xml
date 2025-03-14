@@ -4,7 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="16dp"
+    android:background="@drawable/border_gray">
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_chats"
@@ -15,7 +16,9 @@
     <Button
         android:id="@+id/btn_new_chat"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="新建对话"
-        android:layout_marginTop="8dp"/>
+        android:layout_height="30dp"
+        android:gravity="center"
+        android:background="@drawable/black_square"
+        android:drawableBottom="@drawable/plus"
+        android:layout_marginTop="10dp"/>
 </LinearLayout>
