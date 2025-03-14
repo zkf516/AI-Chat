@@ -13,6 +13,7 @@ class ChatDialogFragment : DialogFragment() {
     private lateinit var adapter: ChatAdapter
     var onNewChat: (() -> Unit)? = null
     var onChatSelected: ((String) -> Unit)? = null
+    var onChatDeleted: ((String) -> Unit)? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -24,10 +25,20 @@ class ChatDialogFragment : DialogFragment() {
 
         view.findViewById<RecyclerView>(R.id.rv_chats).apply {
             layoutManager = LinearLayoutManager(context)
-            adapter = ChatAdapter(chats).also {
+            adapter = ChatAdapter(chats.toMutableList()).also {
+                this@ChatDialogFragment.adapter = it
+
+                //设置选择监听
                 it.setOnItemClickListener { position ->
                     onChatSelected?.invoke(chats[position].id)
                     dismiss()
+                }
+
+                // 设置删除监听
+                it.setOnDeleteClickListener { position ->
+                    val deletedChat = chats[position]
+                    it.removeItem(position)
+                    onChatDeleted?.invoke(deletedChat.id)
                 }
             }
         }

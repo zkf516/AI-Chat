@@ -1,16 +1,11 @@
 package com.example.aichat
 
 import android.annotation.SuppressLint
-import android.graphics.Color
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.graphics.ColorUtils
-import androidx.core.view.WindowCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import okhttp3.*
@@ -26,7 +21,6 @@ import org.json.JSONException
 const val API_KEY = "sk-caa8d044547341b288b84829bfa817f4"
 const val API_URL = "https://api.deepseek.com/v1/chat/completions"
 
-@Suppress("DEPRECATION")
 class MainActivity : AppCompatActivity() {
     private lateinit var sharedPreferences: SharedPreferences
     private val chats = mutableListOf<Chat>()
@@ -55,13 +49,6 @@ class MainActivity : AppCompatActivity() {
         loadChats()  // 加载所有对话
         checkCurrentChat()
 
-        // 设置系统栏透明
-        window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        // 初始化时根据白色背景设置黑色图标
-        setSystemBarIconColor(Color.WHITE)
-
         // 设置监听器
         sendButton.setOnClickListener { sendMessage() }
         moreButton.setOnClickListener { showChatDialog() }
@@ -74,14 +61,6 @@ class MainActivity : AppCompatActivity() {
         moreButton = findViewById(R.id.more_button)
     }
 
-    private fun sendMessage() {
-        val text = messageInput.text.toString().trim()
-        if (text.isEmpty()) return
-
-        addMessage(text, true)
-        messageInput.text.clear()
-        fetchAIResponse(text)
-    }
 
     private fun addMessage(text: String, isUser: Boolean) {
         val message = Message(text, isUser)
@@ -90,12 +69,8 @@ class MainActivity : AppCompatActivity() {
         recyclerView.smoothScrollToPosition(messageAdapter.itemCount - 1)
         updateChatTitle(text)
 
-        // 根据最新消息背景色调整系统栏图标
-        val bgColor = if (isUser) Color.WHITE else Color.BLACK
-        setSystemBarIconColor(bgColor)
         saveChats()
     }
-
 
 
     private fun updateChatTitle(newMessage: String) {
@@ -114,6 +89,15 @@ class MainActivity : AppCompatActivity() {
             createNewChat()
         }
         refreshChatDisplay()
+    }
+
+    private fun sendMessage() {
+        val text = messageInput.text.toString().trim()
+        if (text.isEmpty()) return
+
+        addMessage(text, true)
+        messageInput.text.clear()
+        fetchAIResponse(text)
     }
 
     private fun createNewChat() {
@@ -141,6 +125,10 @@ class MainActivity : AppCompatActivity() {
                 currentChatId = chatId
                 saveChats()
                 refreshChatDisplay()
+            }
+            // 处理删除回调
+            onChatDeleted = { deletedChatId ->
+                handleChatDelete(deletedChatId)
             }
         }.show(supportFragmentManager, "chat_dialog")
     }
@@ -198,6 +186,27 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (chats.isEmpty()) createNewChat()
+    }
+
+    private fun handleChatDelete(deletedChatId: String) {
+        // 从列表中移除
+        val iterator = chats.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next().id == deletedChatId) {
+                iterator.remove()
+                break
+            }
+        }
+
+        // 如果删除的是当前对话
+        if (currentChatId == deletedChatId) {
+            currentChatId = chats.firstOrNull()?.id ?: ""
+            if (currentChatId.isEmpty()) {
+                createNewChat()
+            }
+            refreshChatDisplay()
+        }
+        saveChats()
     }
 
     private fun parseMessages(jsonArray: JSONArray): List<Message> {
@@ -300,25 +309,4 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // 系统栏图标颜色切换函数
-    @Suppress("DEPRECATION")
-    private fun setSystemBarIconColor(backgroundColor: Int) {
-        val isLight = ColorUtils.calculateLuminance(backgroundColor) > 0.5
-
-        // 状态栏处理
-        window.decorView.systemUiVisibility = if (isLight) {
-            window.decorView.systemUiVisibility or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-        } else {
-            window.decorView.systemUiVisibility and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
-        }
-
-        // 导航栏处理
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            window.decorView.systemUiVisibility = if (isLight) {
-                window.decorView.systemUiVisibility or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-            } else {
-                window.decorView.systemUiVisibility and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
-            }
-        }
-    }
 }

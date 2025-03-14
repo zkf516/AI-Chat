@@ -48,7 +48,6 @@ class MessageAdapter(private val messageList: MutableList<Message>) :
         notifyDataSetChanged()
     }
 
-
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val messageText: TextView = view.findViewById(R.id.message_text)
     }
