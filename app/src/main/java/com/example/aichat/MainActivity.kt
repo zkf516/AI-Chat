@@ -13,12 +13,8 @@ import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
 import android.content.SharedPreferences
 import org.json.JSONException
 
@@ -263,5 +259,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         )
+    }
+    private fun cleanMarkdown(text: String): String {
+        return text
+            .replace(Regex("""\*\*(.*?)\*\*"""), "$1")  // 移除加粗
+            .replace(Regex("""\*(.*?)\*"""), "$1")      // 移除斜体
+            .replace(Regex("""^#{1,3}\s+"""), "")       // 移除标题标记
+            .replace(Regex("""```([\s\S]*?)```"""), "$1")// 移除代码块标记
     }
 }
