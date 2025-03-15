@@ -1,5 +1,10 @@
 package com.example.aichat
 
+import com.example.aichat.adapter.MessageAdapter
+import com.example.aichat.dataclass.Chat
+import com.example.aichat.dataclass.Message
+import com.example.aichat.fragment.ChatDialogFragment
+
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.util.Log
@@ -17,20 +22,18 @@ import java.io.IOException
 import android.content.SharedPreferences
 import org.json.JSONException
 
-//设置 LLM 密匙和链接
-const val API_KEY = "sk-caa8d044547341b288b84829bfa817f4"
-const val API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var sharedPreferences: SharedPreferences
-    private val chats = mutableListOf<Chat>()
-    private var currentChatId = ""
-    private lateinit var messageAdapter: MessageAdapter
-
     private lateinit var recyclerView: RecyclerView
     private lateinit var messageInput: EditText
     private lateinit var sendButton: Button
     private lateinit var moreButton: Button
+
+    private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var messageAdapter: MessageAdapter
+    private var currentChatId = ""
+    private val chats = mutableListOf<Chat>()
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,22 +41,17 @@ class MainActivity : AppCompatActivity() {
         initViews()
 
         // 初始化适配器
-        messageAdapter = MessageAdapter(mutableListOf())
-        recyclerView.apply {
-            layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = messageAdapter
-        }
+        initMessageAdapter()
 
         // 初始化 SharedPreferences
-        sharedPreferences = getSharedPreferences("chat_prefs", MODE_PRIVATE)
-        loadChats()  // 加载所有对话
-        checkCurrentChat()
+        initSharedPreferences()
 
         // 设置监听器
         sendButton.setOnClickListener { sendMessage() }
         moreButton.setOnClickListener { showChatDialog() }
     }
 
+    // 初始化 Views
     private fun initViews() {
         recyclerView = findViewById(R.id.recycler_view)
         messageInput = findViewById(R.id.message_input)
@@ -61,6 +59,50 @@ class MainActivity : AppCompatActivity() {
         moreButton = findViewById(R.id.more_button)
     }
 
+    // 初始化消息适配器
+    private fun initMessageAdapter(){
+        messageAdapter = MessageAdapter(mutableListOf())
+        recyclerView.apply {
+            layoutManager = LinearLayoutManager(this@MainActivity)
+            adapter = messageAdapter
+        }
+    }
+
+    // 初始化 SharedPreferences
+    private fun initSharedPreferences(){
+        sharedPreferences = getSharedPreferences("chat_prefs", MODE_PRIVATE)
+        loadChats()  // 加载所有对话
+    }
+
+    // 发送消息
+    private fun sendMessage() {
+        val text = messageInput.text.toString().trim()
+        if (text.isEmpty()) return
+
+        addMessage(text, true)
+        messageInput.text.clear()
+        fetchAIResponse(text)
+    }
+
+    // 显示对话管理窗口
+    private fun showChatDialog() {
+        ChatDialogFragment.newInstance(chats).apply {
+            // 处理新建回调
+            onNewChat = { createNewChat() }
+
+            // 处理选择回调
+            onChatSelected = { chatId ->
+                currentChatId = chatId
+                saveChats()
+                refreshChatDisplay()
+            }
+
+            // 处理删除回调
+            onChatDeleted = { deletedChatId ->
+                handleChatDelete(deletedChatId)
+            }
+        }.show(supportFragmentManager, "chat_dialog")
+    }
 
     private fun addMessage(text: String, isUser: Boolean) {
         val message = Message(text, isUser)
@@ -72,7 +114,12 @@ class MainActivity : AppCompatActivity() {
         saveChats()
     }
 
+    // 获得当前对话id
+    private fun getCurrentChat(): Chat {
+        return chats.first { it.id == currentChatId }
+    }
 
+    // 更新标题
     private fun updateChatTitle(newMessage: String) {
         if (getCurrentChat().title == "新对话" && !newMessage.startsWith("AI:")) {
             getCurrentChat().title = newMessage.take(20)
@@ -80,26 +127,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getCurrentChat(): Chat {
-        return chats.first { it.id == currentChatId }
-    }
-
-    private fun checkCurrentChat() {
-        if (chats.none { it.id == currentChatId }) {
-            createNewChat()
-        }
-        refreshChatDisplay()
-    }
-
-    private fun sendMessage() {
-        val text = messageInput.text.toString().trim()
-        if (text.isEmpty()) return
-
-        addMessage(text, true)
-        messageInput.text.clear()
-        fetchAIResponse(text)
-    }
-
+    // 创建新对话
     private fun createNewChat() {
         val newChat = Chat().apply {
             messages.add(Message("AI: 您好！有什么可以帮您？", false))
@@ -110,6 +138,7 @@ class MainActivity : AppCompatActivity() {
         refreshChatDisplay()
     }
 
+    //刷新对话页面
     @SuppressLint("NotifyDataSetChanged")
     private fun refreshChatDisplay() {
         messageAdapter = MessageAdapter(getCurrentChat().messages)
@@ -118,22 +147,7 @@ class MainActivity : AppCompatActivity() {
         recyclerView.scrollToPosition(messageAdapter.itemCount - 1)
     }
 
-    private fun showChatDialog() {
-        ChatDialogFragment.newInstance(chats).apply {
-            onNewChat = { createNewChat() }
-            onChatSelected = { chatId ->
-                currentChatId = chatId
-                saveChats()
-                refreshChatDisplay()
-            }
-            // 处理删除回调
-            onChatDeleted = { deletedChatId ->
-                handleChatDelete(deletedChatId)
-            }
-        }.show(supportFragmentManager, "chat_dialog")
-    }
-
-    // 存储相关方法
+    //保存对话
     private fun saveChats() {
         val json = JSONArray().apply {
             chats.forEach { chat ->
@@ -160,6 +174,7 @@ class MainActivity : AppCompatActivity() {
             .apply()
     }
 
+    // 加载对话
     private fun loadChats() {
         chats.clear()
         val jsonString = sharedPreferences.getString("chats", null)
@@ -185,9 +200,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        if (chats.isEmpty()) createNewChat()
+        if (chats.isEmpty() || chats.none { it.id == currentChatId })
+            createNewChat()
+
+        refreshChatDisplay()
     }
 
+    //
     private fun handleChatDelete(deletedChatId: String) {
         // 从列表中移除
         val iterator = chats.iterator()
@@ -209,6 +228,7 @@ class MainActivity : AppCompatActivity() {
         saveChats()
     }
 
+    // 解析消息
     private fun parseMessages(jsonArray: JSONArray): List<Message> {
         return List(jsonArray.length()) { j ->
             jsonArray.getJSONObject(j).run {
@@ -221,92 +241,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     private fun fetchAIResponse(userInput: String) {
-        val client = OkHttpClient()
+        val messages = AIResponseHelper.buildMessages(userInput, getCurrentChat().messages)
+        val requestBody = AIResponseHelper.createRequestBody(messages)
 
-        val messages = JSONArray().apply {
-            // 遍历所有历史消息（包括用户和AI的）
-            getCurrentChat().messages.forEach { message ->
-                put(JSONObject().apply {
-                    put("role", if (message.isUser) "user" else "assistant")
-                    put("content", message.content.removePrefix("AI: "))
-                })
-            }
-
-            put(JSONObject().apply {
-                put("role", "user")
-                put("content", userInput)
-            })
-        }
-
-        val jsonBody = JSONObject().apply {
-            put("model", "deepseek-chat")
-            put("messages", messages)
-            put("stream", true)
-        }
-
-        val requestBody = jsonBody.toString()
-            .toRequestBody("application/json".toMediaTypeOrNull())
-
-        val request = Request.Builder()
-            .url(API_URL)
-            .header("Authorization", "Bearer $API_KEY")
-            .header("Content-Type", "application/json")
-            .post(requestBody)
-            .build()
-
-        client.newCall(request).enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                Log.e("API_FAILURE", "Network error", e)
+        runOnUiThread { addMessage("AI：思考中……", false) }
+        AIResponseHelper.sendRequest(
+            requestBody,
+            onResponse = { responseText ->
                 runOnUiThread {
-                    addMessage("AI: 网络请求失败 - ${e.message}", false)
-                    saveChats() // 失败时保存
+                    getCurrentChat().messages.last().content = "AI: $responseText"
+                    messageAdapter.notifyItemChanged(messageAdapter.itemCount - 1)
+                    saveChats()
+                }
+            },
+            onFailure = { errorMessage ->
+                runOnUiThread {
+                    getCurrentChat().messages.last().content = "AI: $errorMessage"
+                    messageAdapter.notifyItemChanged(messageAdapter.itemCount - 1)
+                    saveChats()
                 }
             }
-
-            override fun onResponse(call: Call, response: Response) {
-                if (!response.isSuccessful) {
-                    runOnUiThread {
-                        addMessage("AI: 请求失败，错误码：${response.code}", false)
-                        saveChats() // 错误时保存
-                    }
-                    return
-                }
-
-                val source = response.body?.source()
-                source?.use { bufferedSource ->
-                    var fullResponse = ""
-                    runOnUiThread { addMessage("", false) }
-                    while (!bufferedSource.exhausted()) {
-                        val line = bufferedSource.readUtf8Line() ?: continue
-                        if (line.startsWith("data: ")) {
-                            val json = line.removePrefix("data: ").trim()
-                            try {
-                                val responseObject = JSONObject(json)
-                                val delta = responseObject.optJSONArray("choices")
-                                    ?.optJSONObject(0)
-                                    ?.optJSONObject("delta")
-                                    ?.optString("content", "")
-
-                                if (!delta.isNullOrEmpty()) {
-                                    fullResponse += delta
-                                    runOnUiThread {
-                                        getCurrentChat().messages.last().content = "AI: $fullResponse"
-                                        messageAdapter.notifyItemChanged(messageAdapter.itemCount - 1)
-                                        recyclerView.smoothScrollToPosition(messageAdapter.itemCount - 1)
-                                        saveChats() // 每次更新后保存
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.e("STREAM_ERROR", "Failed to parse stream", e)
-                            }
-                        }
-                    }
-                    runOnUiThread { saveChats() } // 流结束后保存
-                }
-            }
-        })
+        )
     }
-
 }

@@ -1,5 +1,5 @@
 <resources>
-    <style name="Theme.AIChat" parent="Theme.MaterialComponents.DayNight.NoActionBar.Bridge">
+    <style name="Theme.AIChat" parent="Theme.MaterialComponents.Light.NoActionBar.Bridge">
         <!-- Customize your theme here -->
         <item name="android:statusBarColor">#00000000</item> <!-- 设置状态栏背景色为透明 -->
         <item name="android:navigationBarColor">#00000000</item> <!-- 设置导航栏背景色为透明 -->
